@@ -365,7 +365,10 @@
         try {
             const res = await fetch(apiBase, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+                headers: { 
+    'Content-Type': 'application/json',
+    'x-access-code': localStorage.getItem('my_api_access_code') // 自动读取
+},
                 body: JSON.stringify(payload)
             });
             const data = await res.json();

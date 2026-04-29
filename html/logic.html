@@ -254,7 +254,13 @@
         try {
             const response = await fetch(config.url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
+           headers: { 
+            'Content-Type': 'application/json', 
+            // 1. 保留原有的 Authorization（如果你的后端还需要它）
+            'Authorization': `Bearer ${config.key}`,
+            // 2. 🌟 在这里加入你的“通关文牒”
+            'x-access-code': localStorage.getItem('my_api_access_code') 
+        },
                 // 1. 确保 stream 为 false
                 body: JSON.stringify({ model: config.id, messages: currentChat.messages, stream: false })
             });

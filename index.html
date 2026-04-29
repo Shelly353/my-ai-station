@@ -52,27 +52,35 @@
         .nav-text { font-size: 14px; opacity: 0; transition: opacity 0.3s; transition-delay: 0s; }
         .sidebar:hover .nav-text { opacity: 1; transition-delay: 0.1s; }
 
-        /* 🌟 右侧主控框架 (平移与缩放核心逻辑) */
+        /* 🌟 底部重置按钮 (新增) */
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 20px;
+            border-top: 1px solid rgba(0,0,0,0.05);
+        }
+        .reset-btn {
+            font-size: 12px; color: #999; cursor: pointer; text-decoration: underline;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .sidebar:hover .reset-btn { opacity: 1; }
+
+        /* 🌟 右侧主控框架 */
         .main-frame {
-            position: absolute; top: 0; right: 0; /* 锚定在屏幕右侧 */
+            position: absolute; top: 0; right: 0;
             height: 100vh; border: none; background: #fff; z-index: 1;
-            /* 默认计算：100%屏幕宽度 - (左间距20 + 极窄边栏60 + 缓冲间距20) */
             width: calc(100vw - 100px); 
             transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
         }
 
-        /* 联动 1：当边栏展开时，主界面自动计算宽度，向右“挤压/平移” */
         .sidebar:hover ~ .main-frame {
-            /* 100%屏幕宽度 - (左间距20 + 宽边栏220 + 缓冲间距20) */
             width: calc(100vw - 260px); 
         }
 
-        /* 联动 2：当边栏隐藏时，主界面恢复全屏 */
         .sidebar.hidden ~ .main-frame {
             width: 100vw;
         }
 
-        /* 🌟 骨架加载动画 (同样需要联动平移，确保 Spinner 居中) */
+        /* 🌟 骨架加载动画 */
         .loading-overlay {
             position: absolute; top: 0; right: 0; height: 100vh;
             width: calc(100vw - 100px); 
@@ -111,6 +119,10 @@
             <span class="nav-icon">🍌</span>
             <span class="nav-text">image</span>
         </div>
+
+        <div class="sidebar-footer">
+            <span class="reset-btn" onclick="resetAccessCode()">重置访问暗号</span>
+        </div>
     </div>
 
     <div class="loading-overlay" id="loading"><div class="loader"></div></div>
@@ -120,6 +132,33 @@
         const sidebar = document.getElementById('sidebar');
         const mainFrame = document.getElementById('mainFrame');
         const loading = document.getElementById('loading');
+
+        // 🌟 核心：访问暗号管理逻辑
+        window.addEventListener('DOMContentLoaded', () => {
+            checkAccessCode();
+        });
+
+        function checkAccessCode() {
+            let code = localStorage.getItem('my_api_access_code');
+            if (!code) {
+                // 如果本地没有存暗号，则弹出输入框
+                code = prompt("🔐 本工作站受保护，请输入访问暗号：");
+                if (code) {
+                    localStorage.setItem('my_api_access_code', code);
+                    // 刷新当前 iframe 以应用新暗号
+                    mainFrame.contentWindow.location.reload();
+                } else {
+                    alert("未输入暗号，AI 功能将无法正常使用。");
+                }
+            }
+        }
+
+        function resetAccessCode() {
+            if (confirm("确定要重置并重新输入访问暗号吗？")) {
+                localStorage.removeItem('my_api_access_code');
+                location.reload(); // 刷新整个中控台
+            }
+        }
 
         // 边栏显示/隐藏
         function toggleSidebar() {
