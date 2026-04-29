@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工作站中控台</title>
+    <style>
+        /* 基础重置 */
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: system-ui, -apple-system, sans-serif; background: #f4f5f9; }
+        
+        /* 🌟 左上角控制开关 (最高层级) */
+        .toggle-btn {
+            position: fixed; top: 20px; left: 20px; width: 44px; height: 44px;
+            background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08); z-index: 100;
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            color: #333; font-size: 20px; user-select: none;
+        }
+        .toggle-btn:hover { background: #fff; transform: scale(1.05); box-shadow: 0 6px 20px rgba(0,0,0,0.12); }
+        .toggle-btn:active { transform: scale(0.95); }
+
+        /* 🌟 悬浮边栏 (控制左侧空间) */
+        .sidebar {
+            position: fixed; top: 80px; left: 20px; bottom: 20px;
+            width: 60px; /* 默认极窄态 */
+            background: rgba(255, 255, 255, 0.75); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); z-index: 90;
+            display: flex; flex-direction: column; padding: 20px 0; box-sizing: border-box;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); overflow: hidden; white-space: nowrap;
+        }
+
+        /* 鼠标悬停时展开边栏 */
+        .sidebar:hover { width: 220px; }
+
+        /* 边栏隐藏态 */
+        .sidebar.hidden {
+            transform: translateX(-150%); opacity: 0; pointer-events: none;
+        }
+
+        /* 导航按钮样式 */
+        .nav-btn {
+            display: flex; align-items: center; padding: 12px 20px; margin: 8px 10px;
+            border-radius: 10px; cursor: pointer; transition: all 0.2s; color: #4e5969; font-weight: 500;
+        }
+        .nav-btn:hover { background: rgba(0, 0, 0, 0.04); color: #1664ff; }
+        .nav-btn.active { background: #e8f3ff; color: #1664ff; box-shadow: 0 2px 8px rgba(22, 100, 255, 0.15); }
+        
+        .nav-icon { font-size: 20px; min-width: 20px; text-align: center; margin-right: 15px; }
+        .nav-text { font-size: 14px; opacity: 0; transition: opacity 0.3s; transition-delay: 0s; }
+        .sidebar:hover .nav-text { opacity: 1; transition-delay: 0.1s; }
+
+        /* 🌟 右侧主控框架 (平移与缩放核心逻辑) */
+        .main-frame {
+            position: absolute; top: 0; right: 0; /* 锚定在屏幕右侧 */
+            height: 100vh; border: none; background: #fff; z-index: 1;
+            /* 默认计算：100%屏幕宽度 - (左间距20 + 极窄边栏60 + 缓冲间距20) */
+            width: calc(100vw - 100px); 
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
+        }
+
+        /* 联动 1：当边栏展开时，主界面自动计算宽度，向右“挤压/平移” */
+        .sidebar:hover ~ .main-frame {
+            /* 100%屏幕宽度 - (左间距20 + 宽边栏220 + 缓冲间距20) */
+            width: calc(100vw - 260px); 
+        }
+
+        /* 联动 2：当边栏隐藏时，主界面恢复全屏 */
+        .sidebar.hidden ~ .main-frame {
+            width: 100vw;
+        }
+
+        /* 🌟 骨架加载动画 (同样需要联动平移，确保 Spinner 居中) */
+        .loading-overlay {
+            position: absolute; top: 0; right: 0; height: 100vh;
+            width: calc(100vw - 100px); 
+            background: #fff; z-index: 0; display: flex; justify-content: center; align-items: center;
+            pointer-events: none; opacity: 0; 
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
+        }
+        .loading-overlay.show { opacity: 1; z-index: 2; pointer-events: all; }
+        .sidebar:hover ~ .loading-overlay { width: calc(100vw - 260px); }
+        .sidebar.hidden ~ .loading-overlay { width: 100vw; }
+        
+        .loader { width: 40px; height: 40px; border: 3px solid #f3f3f3; border-top: 3px solid #1664ff; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div class="toggle-btn" id="toggleBtn" onclick="toggleSidebar()" title="显示/隐藏边栏">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    </div>
+
+    <div class="sidebar" id="sidebar">
+        <div class="nav-btn active" onclick="loadPage('./html/logic.html', this)">
+            <span class="nav-icon">🧠</span>
+            <span class="nav-text">Logic Base</span>
+        </div>
+        <div class="nav-btn" onclick="loadPage('./html/seedance 1.0 .html', this)">
+            <span class="nav-icon">🎬</span>
+            <span class="nav-text">Video</span>
+        </div>
+        <div class="nav-btn" onclick="loadPage('./html/nano banana.html', this)">
+            <span class="nav-icon">🍌</span>
+            <span class="nav-text">image</span>
+        </div>
+    </div>
+
+    <div class="loading-overlay" id="loading"><div class="loader"></div></div>
+    <iframe class="main-frame" id="mainFrame" src="./html/logic.html" onload="frameLoaded()"></iframe>
+
+    <script>
+        const sidebar = document.getElementById('sidebar');
+        const mainFrame = document.getElementById('mainFrame');
+        const loading = document.getElementById('loading');
+
+        // 边栏显示/隐藏
+        function toggleSidebar() {
+            sidebar.classList.toggle('hidden');
+        }
+
+        // 页面平滑切换
+        function loadPage(url, element) {
+            if(element.classList.contains('active')) return;
+
+            const btns = document.querySelectorAll('.nav-btn');
+            btns.forEach(btn => btn.classList.remove('active'));
+            element.classList.add('active');
+
+            loading.classList.add('show');
+            mainFrame.style.opacity = 0;
+
+            setTimeout(() => {
+                mainFrame.src = url;
+            }, 100);
+        }
+
+        function frameLoaded() {
+            mainFrame.style.opacity = 1;
+            loading.classList.remove('show');
+        }
+    </script>
+</body>
+</html>

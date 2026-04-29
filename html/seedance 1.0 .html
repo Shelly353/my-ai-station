@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seedance 视觉交互工作站</title>
+    <style>
+        :root { --primary: #1664ff; --bg: #f4f5f9; --border: #e5e6eb; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); display: flex; height: 100vh; margin: 0; overflow: hidden; }
+        
+        /* 侧边栏 */
+        .sidebar { width: 360px; background: #fff; border-right: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
+        .main { flex: 1; display: flex; flex-direction: column; padding: 20px; position: relative; min-width: 0; }
+        #chat-history { flex: 1; background: #fff; border-radius: 12px; padding: 20px; overflow-y: auto; border: 1px solid var(--border); }
+        
+        /* 🚀 视频预览区 (小窗口) */
+        .video-preview-box { 
+            width: 180px; height: 101px; /* 16:9 比例的小窗口 */
+            background: #000; border-radius: 6px; cursor: pointer; 
+            margin: 10px 0; overflow: hidden; position: relative; 
+            border: 1px solid var(--border); transition: transform 0.2s;
+        }
+        .video-preview-box:hover { transform: scale(1.02); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .video-preview-box video { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+        /* 预览图上的播放图标提示 */
+        .video-preview-box::after {
+            content: '▶'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: rgba(255,255,255,0.8); font-size: 20px; opacity: 0; transition: 0.2s;
+        }
+        .video-preview-box:hover::after { opacity: 1; }
+
+        /* 首尾帧卡槽 */
+        .frame-slots-container { display: flex; gap: 15px; margin-top: 10px; }
+        .frame-slot { 
+            flex: 1; aspect-ratio: 1; border: 2px dashed var(--border); border-radius: 8px; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            cursor: pointer; position: relative; background: #fafafb;
+        }
+        .frame-slot:hover { border-color: var(--primary); background: #f2f6ff; }
+        .frame-slot img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
+        .slot-label { font-size: 11px; color: #86909c; font-weight: bold; margin-top: 4px; }
+        .remove-btn { position: absolute; top: -5px; right: -5px; background: #f53f3f; color: #fff; width: 18px; height: 18px; border-radius: 50%; font-size: 12px; text-align: center; line-height: 18px; cursor: pointer; display: none; }
+        .frame-slot:hover .remove-btn { display: block; }
+
+        /* 多参考图预览网格 */
+        .image-preview-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
+        .img-container { position: relative; width: 100%; aspect-ratio: 1; border-radius: 4px; overflow: hidden; border: 1px solid #eee; background: #fff; }
+        .img-thumb { width: 100%; height: 100%; object-fit: cover; }
+        .img-remove { position: absolute; top: 0; right: 0; background: rgba(245, 63, 63, 0.85); color: white; font-size: 10px; padding: 1px 4px; border-bottom-left-radius: 4px; cursor: pointer; }
+
+        /* 基础 UI */
+        .btn { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: bold; }
+        .btn-primary { background: var(--primary); color: white; }
+        .sys-group { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #eee; }
+        label { font-size: 12px; font-weight: bold; color: #4e5969; display: block; margin-bottom: 5px; }
+        select, input { font-size: 12px; padding: 8px; width: 100%; box-sizing: border-box; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 10px; outline: none;}
+        select:focus, input:focus { border-color: var(--primary); }
+
+        /* 输入区 */
+        .input-area { background: #fff; padding: 15px; border-radius: 12px; border: 1px solid var(--border); margin-top: 15px; flex-shrink: 0; position: relative; }
+        .rich-input { width: 100%; min-height: 80px; max-height: 150px; overflow-y: auto; padding: 12px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 8px; outline: none; font-size: 14px; line-height: 1.6; }
+        .rich-input:empty:before { content: attr(data-placeholder); color: #86909c; pointer-events: none; }
+        .inline-pill { display: inline-flex; align-items: center; background: #e8f3ff; border: 1px solid #bcdcff; border-radius: 4px; padding: 2px 6px; margin: 0 4px; vertical-align: middle; }
+        .inline-pill img { width: 18px; height: 18px; object-fit: cover; border-radius: 2px; margin-right: 4px; }
+
+        /* 弹窗播放大窗 */
+        #modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92); z-index: 5000; justify-content: center; align-items: center; flex-direction: column; }
+        #modal video { max-width: 90%; max-height: 85%; box-shadow: 0 0 50px rgba(0,0,0,0.5); border-radius: 8px; }
+        #modal .close-modal-btn { position: absolute; top: 20px; right: 30px; color: #fff; font-size: 40px; cursor: pointer; user-select: none; }
+        #modal .video-info { color: #ccc; margin-top: 15px; font-size: 14px; text-align: center; }
+
+        .task-card { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 15px; margin-bottom: 15px; }
+        #mentionMenu { display: none; position: fixed; background: white; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-radius: 8px; padding: 10px; z-index: 1000; width: 220px; }
+        #mentionMenuGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        .mention-item { width: 45px; height: 45px; border-radius: 4px; overflow: hidden; cursor: pointer; border: 2px solid transparent; }
+        .mention-item:hover { border-color: var(--primary); }
+        .mention-item img { width: 100%; height: 100%; object-fit: cover; }
+        #hoverPreview { display: none; position: fixed; z-index: 6000; background: #fff; padding: 5px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); pointer-events: none; }
+        #hoverPreview img { max-width: 250px; border-radius: 4px; }
+        .error-console { border: 1px solid #fadcda; background: #fff; border-radius: 8px; margin-top: 15px; flex-shrink: 0; }
+        .error-header { background: #ffece8; color: #f53f3f; padding: 8px 12px; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; justify-content: space-between; }
+        .error-body { display: none; background: #1e1e1e; padding: 10px; }
+        #errorLogText { width: 100%; height: 80px; background: transparent; color: #ff8a8a; border: none; resize: none; font-size: 12px; font-family: monospace; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h3 style="margin-bottom:20px;">🎬 视频生成工坊</h3>
+    
+    <label>模型选择</label>
+    <select id="modelSelect" onchange="saveSet()"></select>
+
+    <label>模式</label>
+    <select id="apiMode" onchange="handleModeChange()" style="border-color:var(--primary); color:var(--primary); font-weight:bold;">
+        <option value="first_last">🚀 首尾帧模式</option>
+        <option value="multi_ref">🎨 多参考模式</option>
+    </select>
+    
+    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:6px;">
+        <div>
+            <label>比例</label>
+            <select id="ratio">
+                <option>16:9</option>
+                <option>9:16</option>
+                <option>21:9</option>
+                <option>4:3</option>
+                <option>1:1</option>
+            </select>
+        </div>
+        <div>
+            <label>时长</label>
+            <select id="duration">
+                <option value="4">4s</option>
+                <option value="5" selected>5s</option>
+                <option value="6">6s</option>
+                <option value="7">7s</option>
+                <option value="8">8s</option>
+                <option value="9">9s</option>
+                <option value="10">10s</option>
+                <option value="11">11s</option>
+                <option value="12">12s</option>
+                <option value="13">13s</option>
+                <option value="14">14s</option>
+                <option value="15">15s</option>
+            </select>
+        </div>
+        <div>
+            <label>分辨率</label>
+            <select id="resolution">
+                <option selected>1080p</option>
+                <option>720p</option>
+                <option>480p</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="sys-group" id="imageManager">
+        <div id="firstLastUI">
+            <label>首尾帧卡槽</label>
+            <div class="frame-slots-container">
+                <div class="frame-slot" id="slot0" onclick="triggerSlotUpload(0)"><div class="slot-label">+ 首帧</div></div>
+                <div class="frame-slot" id="slot1" onclick="triggerSlotUpload(1)"><div class="slot-label">+ 尾帧</div></div>
+            </div>
+        </div>
+        <div id="multiRefUI" style="display:none;">
+            <label id="multiLabel">参考图库 (0/14)</label>
+            <input type="file" id="multiInput" multiple accept="image/*" onchange="handleMultiUpload(this)">
+            <div id="multiPreviewGrid" class="image-preview-grid"></div>
+        </div>
+        <input type="file" id="slotInput" accept="image/*" style="display:none;" onchange="handleSlotUpload(this)">
+    </div>
+
+    <div class="sys-group">
+        <button class="btn" style="width:100%; background:#eee; margin-bottom:5px;" onclick="exportHistory()">导出记录</button>
+        <button class="btn" style="width:100%; background:#eee;" onclick="document.getElementById('importFile').click()">导入记录</button>
+        <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importHistory(event)">
+    </div>
+</div>
+
+<div class="main">
+    <div id="chat-history"></div>
+    <div class="input-area">
+        <div id="prompt" class="rich-input" contenteditable="true" data-placeholder="请输入提示词..."></div>
+        <div id="mentionMenu"><div id="mentionMenuGrid"></div></div>
+        <button class="btn btn-primary" style="float:right; margin-top:10px; width:120px;" onclick="runTask()">🚀 生成视频</button>
+        <div style="clear:both;"></div>
+    </div>
+    <div id="hoverPreview"><img id="hoverImg" src=""></div>
+    <div id="errorConsole" class="error-console">
+        <div class="error-header" onclick="document.querySelector('.error-body').style.display = document.querySelector('.error-body').style.display==='block'?'none':'block'"><span>⚠️ 错误日志</span><span>▲</span></div>
+        <div class="error-body"><textarea id="errorLogText" readonly></textarea></div>
+    </div>
+</div>
+
+<div id="modal">
+    <span class="close-modal-btn" onclick="closeModal()">×</span>
+    <video id="mv" controls autoplay></video>
+    <div class="video-info" id="videoInfo">视频加载中...</div>
+</div>
+
+<script>
+    // =============================
+    // ⚙️ 硬编码配置区
+    // =============================
+    const MODEL_CONFIG = {
+        "doubao-seedance-1-0-pro-250528": {
+            name: "seedance 1.0",
+            apiType: "volcengine",
+            apiUrl: "https://proxy-server-0m02.onrender.com/api/volcengine/create",
+            getPollUrl: function(taskId) { 
+                return `https://proxy-server-0m02.onrender.com/api/volcengine/poll/${taskId}`; 
+            },
+            apiKey: "node-proxy" // <-- ⚠️ 替换为真实的 Key
+        },
+            "wan2.7-r2v": {
+            name: "wan2.7",
+            apiType: "dashscope",
+            // 🌟 核心：使用你刚生成的 Render 公网地址 + API 路径
+            apiUrl: "https://proxy-server-0m02.onrender.com/api/dashscope/create",
+            
+            // 🌟 核心：查询进度的路径也要对应修改
+            getPollUrl: function(taskId) { 
+                return `https://proxy-server-0m02.onrender.com/api/dashscope/poll/${taskId}`; 
+            },
+            
+            apiKey: "node-proxy" // 随便填，后端会处理真实的 Key
+        },
+        "happyhorse-1.0-r2v": {
+            name: "happy horse 1.0",
+            apiType: "dashscope",
+            apiUrl: "https://proxy-server-0m02.onrender.com/api/dashscope/create",
+            getPollUrl: function(taskId) { 
+                return `https://proxy-server-0m02.onrender.com/api/dashscope/poll/${taskId}`; 
+            },
+            
+            apiKey: "node-proxy" // <-- ⚠️ 替换为真实的 Key
+        }
+    };
+
+    // =============================
+    // 全局状态
+    // =============================
+    let history = JSON.parse(localStorage.getItem('seed_v_history') || '[]');
+    let slotImages = [null, null];
+    let multiImages = [];
+    let currentSlotIndex = null;
+    let savedRange = null;
+    let taskTimers = {}; // 🌟 新增：用于独立管理每个任务的轮询定时器
+
+    window.onload = () => {
+        const modelSelect = document.getElementById('modelSelect');
+        for (const [id, config] of Object.entries(MODEL_CONFIG)) {
+            const option = document.createElement('option');
+            option.value = id;
+            option.text = config.name;
+            modelSelect.appendChild(option);
+        }
+        
+        const savedModel = localStorage.getItem('seed_v_model');
+        if (savedModel && MODEL_CONFIG[savedModel]) {
+            modelSelect.value = savedModel;
+        }
+        document.getElementById('apiMode').value = localStorage.getItem('seed_v_mode') || 'first_last';
+        handleModeChange();
+        render();
+    };
+
+    function saveSet() {
+        localStorage.setItem('seed_v_model', document.getElementById('modelSelect').value);
+        localStorage.setItem('seed_v_mode', document.getElementById('apiMode').value);
+    }
+
+    function handleModeChange() {
+        const m = document.getElementById('apiMode').value;
+        document.getElementById('firstLastUI').style.display = m==='first_last'?'block':'none';
+        document.getElementById('multiRefUI').style.display = m==='multi_ref'?'block':'none';
+        saveSet();
+    }
+
+    // =============================
+    // 图片上传与预览逻辑
+    // =============================
+    function triggerSlotUpload(i) { currentSlotIndex=i; document.getElementById('slotInput').click(); }
+    function handleSlotUpload(inp) {
+        if(!inp.files[0]) return;
+        const r = new FileReader();
+        r.onload = (e) => { slotImages[currentSlotIndex] = e.target.result; updateSlotUI(currentSlotIndex); };
+        r.readAsDataURL(inp.files[0]);
+        inp.value = "";
+    }
+    function updateSlotUI(i) {
+        const s = document.getElementById(`slot${i}`);
+        if(slotImages[i]) s.innerHTML = `<span class="remove-btn" onclick="removeSlot(event,${i})">×</span><img src="${slotImages[i]}">`;
+        else s.innerHTML = `<div class="slot-label">+ ${i===0?'首帧':'尾帧'}</div>`;
+    }
+    function removeSlot(e, i) { e.stopPropagation(); slotImages[i]=null; updateSlotUI(i); }
+
+    function handleMultiUpload(inp) {
+        Array.from(inp.files).forEach(f => {
+            if (multiImages.length >= 14) return;
+            const r = new FileReader();
+            r.onload = (e) => { multiImages.push(e.target.result); refreshMultiGrid(); };
+            r.readAsDataURL(f);
+        });
+        inp.value = "";
+    }
+    function refreshMultiGrid() {
+        document.getElementById('multiLabel').innerText = `参考图库 (${multiImages.length}/14)`;
+        document.getElementById('multiPreviewGrid').innerHTML = multiImages.map((img,i)=>`
+            <div class="img-container">
+                <img src="${img}" class="img-thumb">
+                <span class="img-remove" onclick="multiImages.splice(${i},1);refreshMultiGrid()">×</span>
+            </div>
+        `).join('');
+    }
+
+    // =============================
+    // @ 交互逻辑
+    // =============================
+    const promptEl = document.getElementById('prompt');
+    promptEl.addEventListener('input', (e) => {
+        if(document.getElementById('apiMode').value!=='multi_ref') return;
+        const sel = window.getSelection();
+        const range = sel.getRangeAt(0);
+        const text = range.startContainer.textContent.substring(0, range.startOffset);
+        if(text.endsWith('@')) {
+            if(multiImages.length===0) return alert("请先上传参考图");
+            showMentionMenu(range);
+        } else document.getElementById('mentionMenu').style.display='none';
+    });
+
+    function showMentionMenu(range) {
+        savedRange = range.cloneRange();
+        const rect = range.getBoundingClientRect();
+        const menu = document.getElementById('mentionMenu');
+        menu.style.display = 'block';
+        menu.style.left = rect.left + 'px';
+        menu.style.top = (rect.bottom + 10) + 'px';
+        document.getElementById('mentionMenuGrid').innerHTML = multiImages.map((img,i)=>`
+            <div class="mention-item" onmousedown="event.preventDefault();insertPill(${i},'${img}')"><img src="${img}"></div>
+        `).join('');
+    }
+
+    function insertPill(i, img) {
+        document.getElementById('mentionMenu').style.display='none';
+        const sel = window.getSelection();
+        sel.removeAllRanges(); sel.addRange(savedRange);
+        savedRange.setStart(savedRange.startContainer, savedRange.startOffset - 1);
+        savedRange.deleteContents();
+        const span = document.createElement('span');
+        span.className = 'inline-pill'; span.contentEditable = 'false';
+        span.setAttribute('data-b64', img);
+        span.innerHTML = `<img src="${img}"><span>Ref</span>`;
+        span.onmouseenter = () => {
+            const hp = document.getElementById('hoverPreview');
+            document.getElementById('hoverImg').src = img;
+            hp.style.display='block';
+            const r = span.getBoundingClientRect();
+            hp.style.left = r.left + 'px'; hp.style.top = (r.top - 260) + 'px';
+        };
+        span.onmouseleave = () => document.getElementById('hoverPreview').style.display='none';
+        savedRange.insertNode(span);
+        const space = document.createTextNode('\u00A0');
+        savedRange.setStartAfter(span); savedRange.insertNode(space);
+        savedRange.collapse(false); sel.removeAllRanges(); sel.addRange(savedRange);
+    }
+
+    // =============================
+    // 任务运行与轮询逻辑
+    // =============================
+    async function runTask() {
+        const mid = document.getElementById('modelSelect').value;
+        const config = MODEL_CONFIG[mid];
+        const key = config.apiKey;
+        const apiUrl = config.apiUrl;
+        
+        const p = promptEl.innerText.trim();
+        if(!key || key.includes("填写")) return alert("请先在源码 MODEL_CONFIG 中配置真实的 API Key");
+        if(!p) return alert("请输入提示词");
+
+        const id = Date.now();
+        history.unshift({ id, prompt: p, status: 'loading' });
+        render();
+
+        let requestBody = {};
+        let headers = { 
+            'Content-Type': 'application/json', 
+            'Authorization': `Bearer ${key}` 
+        };
+
+        // 根据平台类型构建不同的数据格式
+        if (config.apiType === 'dashscope') {
+            headers['X-DashScope-Async'] = 'enable';
+            requestBody = {
+                model: mid,
+                input: { prompt: p },
+                parameters: {
+                    resolution: document.getElementById('resolution').value.toUpperCase(), 
+                    ratio: document.getElementById('ratio').value,
+                    duration: parseInt(document.getElementById('duration').value) 
+                }
+            };
+
+            let targetImages = [];
+            
+            if (document.getElementById('apiMode').value === 'first_last') {
+                if (slotImages[0]) targetImages.push({ type: "reference_image", url: slotImages[0] });
+                if (slotImages[1]) targetImages.push({ type: "reference_image", url: slotImages[1] }); 
+            } else if (document.getElementById('apiMode').value === 'multi_ref') {
+                const pills = promptEl.querySelectorAll('.inline-pill');
+                pills.forEach(pill => {
+                    targetImages.push({ type: "reference_image", url: pill.getAttribute('data-b64') });
+                });
+            }
+
+            if (targetImages.length > 0) {
+                requestBody.input.media = targetImages;
+            }
+        } else {
+            // 火山引擎逻辑
+            const content = [{ type: "text", text: p + ` --ratio ${document.getElementById('ratio').value} --duration ${document.getElementById('duration').value} --resolution ${document.getElementById('resolution').value}` }];
+            if(document.getElementById('apiMode').value==='first_last') {
+                if(slotImages[0]) content.push({ type:"image_url", image_url:{url:slotImages[0]}, role:"first_frame"});
+                if(slotImages[1]) content.push({ type:"image_url", image_url:{url:slotImages[1]}, role:"last_frame"});
+            } else {
+                promptEl.querySelectorAll('.inline-pill').forEach(pill => {
+                    content.push({ type:"image_url", image_url:{url:pill.getAttribute('data-b64')}, role:"reference_image"});
+                });
+            }
+            requestBody = { model: mid, content: content };
+        }
+
+        try {
+            // 🌟 删除了代理，直接向原始目标 apiUrl 发送请求
+            const res = await fetch(apiUrl, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(requestBody)
+            });
+            const data = await res.json();
+            
+            if(data.error || data.code) throw new Error(data.error?.message || data.message || "请求失败");
+            
+            const taskId = config.apiType === 'dashscope' ? data.output.task_id : data.id;
+            
+            // 🌟 调用新的字典式轮询监控函数
+            startTaskMonitor(id, mid, taskId); 
+            
+        } catch (e) {
+            document.getElementById('errorLogText').value += `[${new Date().toLocaleTimeString()}] 发送错误: ${e.message}\n`;
+            update(id, 'failed');
+        }
+    }
+
+    // 🌟 新的轮询监控函数（支持多任务并发、原生直连请求）
+    function startTaskMonitor(localId, mid, cloudTaskId) {
+        const config = MODEL_CONFIG[mid];
+        const key = config.apiKey;
+        const pollUrl = config.getPollUrl(cloudTaskId);
+
+        // 防抖：如果这个任务已经在轮询了，先清除旧的定时器
+        if (taskTimers[localId]) {
+            clearInterval(taskTimers[localId]);
+        }
+
+        // 存入字典，独立管理
+        taskTimers[localId] = setInterval(async () => {
+            const item = history.find(x => x.id === localId);
+            
+            // 如果任务已经被用户删除，或者状态已经完成/失败，直接停止当前轮询
+            if (!item || ['success', 'failed'].includes(item.status)) {
+                clearInterval(taskTimers[localId]);
+                delete taskTimers[localId];
+                return;
+            }
+
+            try {
+                // 🌟 删除了代理，直接向原始 pollUrl 查询
+                const res = await fetch(pollUrl, {
+                    headers: { 'Authorization': `Bearer ${key}` }
+                });
+                
+                if (!res.ok) throw new Error(`查询失败，状态码: ${res.status}`);
+                const d = await res.json();
+                
+                // 兼容两种平台的返回状态判断
+                if (config.apiType === 'dashscope') {
+                    if(d.output && d.output.task_status === 'SUCCEEDED') { 
+                        clearInterval(taskTimers[localId]); 
+                        delete taskTimers[localId];
+                        update(localId, 'success', d.output.video_url); 
+                    } else if(d.output && d.output.task_status === 'FAILED') { 
+                        throw new Error(d.output.message || "阿里云生成失败"); 
+                    }
+                } else {
+                    if(d.status === 'succeeded') { 
+                        clearInterval(taskTimers[localId]); 
+                        delete taskTimers[localId];
+                        update(localId, 'success', d.content.video_url); 
+                    } else if(d.status === 'failed') { 
+                        throw new Error("火山引擎生成失败"); 
+                    }
+                }
+            } catch (e) {
+                // 容错机制：网络波动记录日志，不立刻退出轮询
+                document.getElementById('errorLogText').value += `[${new Date().toLocaleTimeString()}] 轮询异常 (任务 ${localId}): ${e.message}\n`;
+                
+                // 如果是明确的业务失败报错，才终止轮询
+                if(e.message.includes("生成失败") || e.message.includes("状态码: 4") || e.message.includes("状态码: 5")) {
+                    clearInterval(taskTimers[localId]);
+                    delete taskTimers[localId];
+                    update(localId, 'failed');
+                }
+            }
+        }, 5000); // 每 5 秒查询一次
+    }
+
+    function update(id, s, url) {
+        const i = history.find(x => x.id === id);
+        if(i) { i.status = s; if(url) i.url = url; localStorage.setItem('seed_v_history', JSON.stringify(history)); render(); }
+    }
+
+    function deleteTask(id) {
+        // 🌟 删除任务时同时销毁轮询定时器
+        if (taskTimers[id]) {
+            clearInterval(taskTimers[id]);
+            delete taskTimers[id];
+        }
+        history = history.filter(x => x.id !== id);
+        localStorage.setItem('seed_v_history', JSON.stringify(history));
+        render();
+    }
+
+    function render() {
+        document.getElementById('chat-history').innerHTML = history.map(item => `
+            <div class="task-card">
+                <div style="font-size:11px;color:#888;">ID: ${item.id}</div>
+                <div style="font-size:14px;margin:5px 0;"><b>Prompt:</b> ${item.prompt}</div>
+                
+                ${item.status === 'loading' ? '<div style="color:orange;">⏳ 正在渲染...</div>' : ''}
+                ${item.status === 'failed' ? '<div style="color:#f53f3f;font-weight:bold;">❌ 生成失败，请查看底部报错日志。</div>' : ''}
+                
+                ${item.status === 'success' ? `
+                    <div class="video-preview-box" onclick="play('${item.url}', './videos/${item.id}.mp4', '${item.id}')">
+                        <video src="./videos/${item.id}.mp4" onerror="this.onerror=null;this.src='${item.url}';" muted loop onmouseover="this.play()" onmouseout="this.pause()"></video>
+                    </div>
+                ` : ''}
+                
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    ${item.status === 'success' ? `
+                        <button class="btn" style="background:#e8f3ff;color:#1664ff;" onclick="forceDownload('${item.url}',${item.id})">下载视频</button>
+                    ` : ''}
+                    <button class="btn" style="background:#fff1f0;color:#f53f3f;" onclick="deleteTask(${item.id})">删除</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function play(remote, local, id) {
+        const m = document.getElementById('modal');
+        const v = document.getElementById('mv');
+        const info = document.getElementById('videoInfo');
+        
+        m.style.display = 'flex';
+        info.innerText = `正在播放任务: ${id}`;
+        
+        v.src = local;
+        v.onerror = () => {
+            v.onerror = null;
+            v.src = remote;
+            info.innerText = `本地文件未找到，正在播放云端链接 (ID: ${id})`;
+        };
+    }
+
+    function closeModal() {
+        const m = document.getElementById('modal');
+        const v = document.getElementById('mv');
+        v.pause();
+        m.style.display = 'none';
+    }
+
+    async function forceDownload(u, id) {
+        const res = await fetch(u); const b = await res.blob();
+        const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `${id}.mp4`; a.click();
+    }
+
+    function exportHistory() { const a=document.createElement('a'); a.href="data:text/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(history)); a.download="history.json"; a.click(); }
+    function importHistory(e) { const r=new FileReader(); r.onload=(x)=>{history=JSON.parse(x.target.result);render();}; r.readAsText(e.target.files[0]); }
+</script>
+</body>
+</html>

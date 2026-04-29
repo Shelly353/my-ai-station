@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 逻辑中控台 (带错误日志版)</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root { --primary: #1a73e8; --bg: #f4f5f9; --border: #e0e0e0; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); display: flex; height: 100vh; margin: 0; overflow: hidden; }
+        
+        .sidebar { width: 300px; background: #fff; border-right: 1px solid var(--border); padding: 25px; display: flex; flex-direction: column; flex-shrink: 0; }
+        .main { flex: 1; display: flex; flex-direction: column; padding: 20px; min-width: 0; }
+        
+        #chat-window { flex: 1; background: #fff; border-radius: 12px; padding: 20px; overflow-y: auto; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        
+        .input-box { background: #fff; padding: 15px; border-radius: 30px; display: flex; gap: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-top: 20px; align-items: center; flex-shrink: 0; }
+        textarea { flex: 1; border: none; outline: none; padding: 10px; resize: none; font-size: 16px; font-family: inherit; }
+        
+        .btn { background: var(--primary); color: #fff; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 13px; }
+        .btn:hover { background: #1557b0; }
+        .btn-outline { background: #fff; color: var(--primary); border: 1px solid var(--primary); }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+        
+        label { font-size: 12px; font-weight: bold; color: #888; margin-bottom: 8px; display: block; text-transform: uppercase; }
+        select { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; background-color: #f8f9fa; cursor: pointer; margin-bottom: 20px; outline: none;}
+        
+        .msg { margin-bottom: 15px; line-height: 1.6; word-break: break-word; }
+        .user-msg { color: var(--primary); font-weight: bold; border-left: 4px solid var(--primary); padding-left: 10px; }
+        pre { background: #2d2d2d; color: #ccc; padding: 12px; border-radius: 8px; overflow-x: auto; }
+        
+        .history-list { flex: 1; overflow-y: auto; margin-top: 10px; padding-right: 5px; }
+        .history-item { padding: 12px; background: #f8f9fa; border-radius: 8px; cursor: pointer; font-size: 13px; margin-bottom: 8px; border: 1px solid transparent; display: flex; justify-content: space-between; align-items: center; }
+        .history-item:hover { border-color: var(--primary); background: #e8f3ff; }
+        .history-item.active { background: #e8f3ff; border-color: var(--primary); font-weight: bold; }
+        .del-btn { color: #dc3545; cursor: pointer; padding: 4px; font-size: 14px; opacity: 0.6; }
+
+        /* 🌟 底部错误日志控制台样式 */
+        .error-console { border: 1px solid #fadcda; background: #fff; border-radius: 8px; margin-top: 15px; flex-shrink: 0; overflow: hidden; transition: all 0.3s; }
+        .error-header { background: #ffece8; color: #f53f3f; padding: 10px 15px; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; justify-content: space-between; user-select: none; }
+        .error-header:hover { background: #ffdcd6; }
+        .error-body { display: none; background: #1e1e1e; padding: 10px; border-top: 1px solid #fadcda; }
+        .error-console.open .error-body { display: block; }
+        #errorLogText { width: 100%; height: 100px; background: transparent; color: #ff8a8a; border: none; outline: none; resize: none; font-family: monospace; font-size: 12px; box-sizing: border-box; }
+
+        .sidebar-footer { margin-top: 15px; font-size: 11px; color: #999; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h3 style="margin-top: 0;">🤖 Logic Base</h3>
+    <button class="btn" style="width: 100%; margin-bottom: 20px;" onclick="createNewChat()">➕ 新建聊天</button>
+    <label>当前模型</label>
+    <select id="modelSelect" onchange="switchModel()"></select>
+
+    <label>历史记录</label>
+    <div id="historyList" class="history-list"></div>
+
+    <button class="btn btn-outline" style="width: 100%; margin-top: 10px;" onclick="exportCurrentModelHistory()">📥 导出数据</button>
+    <button class="btn btn-outline" style="width: 100%; margin-top: 5px;" onclick="document.getElementById('importFile').click()">📤 导入数据</button>
+    <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importHistory(event)">
+    
+    <div class="sidebar-footer">IndexedDB 本地存储<br>数据安全隔离</div>
+</div>
+
+<div class="main">
+    <div id="chat-window">
+        <div class="msg"><b>系统:</b> 数据库加载中...</div>
+    </div>
+    
+    <div class="input-box">
+        <textarea id="userInput" rows="1" placeholder="输入消息..." disabled></textarea>
+        <button id="sendBtn" class="btn" onclick="sendMsg()" disabled>发送</button>
+    </div>
+
+    <div id="errorConsole" class="error-console">
+        <div class="error-header" onclick="toggleErrorConsole()">
+            <span>⚠️ API 错误监控日志 (<span id="errorCount">0</span>)</span>
+            <span id="errorToggleIcon">▲ 点击展开</span>
+        </div>
+        <div class="error-body">
+            <textarea id="errorLogText" readonly placeholder="目前没有报错记录..."></textarea>
+        </div>
+    </div>
+</div>
+
+<script>
+    const modelPresets = {
+        "deepseek V4-pro": { name: "deepseek-v4-pro", url: "https://proxy-server-0m02.onrender.com/api/deepseek/chat", id: "deepseek-v4-pro", key: "node-proxy" },
+        "deepseek V4-flash": { name: "deepseek-v4-flash", url: "https://proxy-server-0m02.onrender.com/api/deepseek/chat", id: "deepseek-v4-flash", key: "node-proxy" },
+        "gemini": { 
+            name: "Gemini 3.1 Flash", 
+            url: "https://proxy-server-0m02.onrender.com/api/googl/chat", 
+            id: "gemini-3-flash-preview", // 🌟 恢复为你最初正确的 3.x ID！
+            key: "node-proxy" 
+        }
+    };
+
+    let currentModel = 'deepseek';
+    let currentChatId = null;
+    let chatHistory = [];
+    let db;
+    let errorCount = 0;
+
+    // 🌟 控制台折叠逻辑
+    function toggleErrorConsole() {
+        const consoleEl = document.getElementById('errorConsole');
+        const icon = document.getElementById('errorToggleIcon');
+        if (consoleEl.classList.contains('open')) {
+            consoleEl.classList.remove('open');
+            icon.innerText = '▲ 点击展开';
+        } else {
+            consoleEl.classList.add('open');
+            icon.innerText = '▼ 点击折叠';
+        }
+    }
+
+    // 🌟 记录错误日志
+    function logError(msg) {
+        errorCount++;
+        document.getElementById('errorCount').innerText = errorCount;
+        const logText = document.getElementById('errorLogText');
+        const time = new Date().toLocaleTimeString();
+        logText.value = `[${time}] ❌ ERROR: ${msg}\n------------------------------\n` + logText.value;
+        
+        // 自动展开控制台以提醒用户
+        const consoleEl = document.getElementById('errorConsole');
+        if (!consoleEl.classList.contains('open')) toggleErrorConsole();
+    }
+
+    // 数据库初始化
+    const DB_NAME = 'AILogicDB';
+    const STORE_NAME = 'ChatHistoryStore';
+
+    async function initDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, 1);
+            request.onupgradeneeded = (e) => {
+                db = e.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+            };
+            request.onsuccess = (e) => { db = e.target.result; resolve(); };
+            request.onerror = (e) => reject(e);
+        });
+    }
+
+    async function saveToDB(modelKey, dataArray) {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).put(dataArray, modelKey);
+    }
+
+    async function loadFromDB(modelKey) {
+        return new Promise((resolve) => {
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const req = tx.objectStore(STORE_NAME).get(modelKey);
+            req.onsuccess = () => resolve(req.result || []);
+        });
+    }
+
+    window.onload = async () => {
+        const select = document.getElementById('modelSelect');
+        Object.keys(modelPresets).forEach(key => {
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = modelPresets[key].name;
+            select.appendChild(opt);
+        });
+        currentModel = select.value;
+        try {
+            await initDB();
+            document.getElementById('userInput').disabled = false;
+            document.getElementById('sendBtn').disabled = false;
+            await switchModel();
+        } catch (e) { logError("数据库连接失败: " + e.message); }
+    };
+
+    async function switchModel() {
+        currentModel = document.getElementById('modelSelect').value;
+        chatHistory = await loadFromDB(currentModel);
+        createNewChat();
+    }
+
+    function createNewChat() {
+        currentChatId = null;
+        document.getElementById('chat-window').innerHTML = `<div class="msg"><b>系统:</b> 欢迎使用 ${modelPresets[currentModel].name}。</div>`;
+        renderHistoryList();
+    }
+
+    function renderHistoryList() {
+        const listDiv = document.getElementById('historyList');
+        if (chatHistory.length === 0) {
+            listDiv.innerHTML = '<div style="color:#999; font-size:12px; text-align:center;">暂无记录</div>';
+            return;
+        }
+        listDiv.innerHTML = chatHistory.map(chat => `
+            <div class="history-item ${chat.id === currentChatId ? 'active' : ''}" onclick="loadChat('${chat.id}')">
+                <div class="title">${chat.title}</div>
+                <div class="del-btn" onclick="deleteChat(event, '${chat.id}')">🗑️</div>
+            </div>
+        `).join('');
+    }
+
+    function loadChat(chatId) {
+        currentChatId = chatId;
+        const chat = chatHistory.find(c => c.id === chatId);
+        if (!chat) return;
+        renderHistoryList();
+        const win = document.getElementById('chat-window');
+        win.innerHTML = chat.messages.map(m => m.role === 'user' ? `<div class="msg user-msg">You: ${m.content}</div>` : `<div class="msg"><b>AI:</b> ${marked.parse(m.content)}</div>`).join('');
+        win.scrollTop = win.scrollHeight;
+    }
+
+    async function deleteChat(event, chatId) {
+        event.stopPropagation();
+        if (!confirm("删除记录？")) return;
+        chatHistory = chatHistory.filter(c => c.id !== chatId);
+        await saveToDB(currentModel, chatHistory);
+        if (currentChatId === chatId) createNewChat();
+        else renderHistoryList();
+    }
+
+    // 发送消息
+    window.sendMsg = async () => {
+        const config = modelPresets[currentModel];
+        const input = document.getElementById('userInput');
+        const btn = document.getElementById('sendBtn');
+        const win = document.getElementById('chat-window');
+        const prompt = input.value.trim();
+        if (!prompt) return;
+
+        btn.disabled = true;
+        input.value = '';
+
+        if (!currentChatId) {
+            currentChatId = Date.now().toString();
+            chatHistory.unshift({ id: currentChatId, title: prompt.substring(0, 15), messages: [] });
+            win.innerHTML = '';
+        }
+
+        const currentChat = chatHistory.find(c => c.id === currentChatId);
+        currentChat.messages.push({ role: 'user', content: prompt });
+        await saveToDB(currentModel, chatHistory);
+        renderHistoryList();
+
+        win.innerHTML += `<div class="msg user-msg">You: ${prompt}</div>`;
+        const botDiv = document.createElement('div');
+        botDiv.className = 'msg';
+        botDiv.innerHTML = `<i>AI 正在思考...</i>`;
+        win.appendChild(botDiv);
+        win.scrollTop = win.scrollHeight;
+
+    // 🌟 找到 logic.html 中的这部分并替换
+        try {
+            const response = await fetch(config.url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
+                // 1. 确保 stream 为 false
+                body: JSON.stringify({ model: config.id, messages: currentChat.messages, stream: false })
+            });
+
+            if (!response.ok) {
+                const errBody = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errBody}`);
+            }
+
+            // 2. 🌟 核心修改：既然不是流式，直接用 .json() 接收完整包裹
+            const data = await response.json();
+            
+            // 3. 提取 AI 回复的内容 (适配标准 OpenAI/DeepSeek/Gemini 格式)
+            let fullText = "";
+            if (data.choices && data.choices[0].message) {
+                fullText = data.choices[0].message.content;
+            } else if (data.candidates) { // 兼容某些原生 Gemini 格式
+                fullText = data.candidates[0].content.parts[0].text;
+            }
+
+            botDiv.innerHTML = `<b>AI:</b> ` + marked.parse(fullText);
+            win.scrollTop = win.scrollHeight;
+
+            currentChat.messages.push({ role: 'assistant', content: fullText });
+            await saveToDB(currentModel, chatHistory);
+
+        } catch (e) {
+            logError(e.message); 
+            botDiv.innerHTML = `<span style="color:red">请求失败: ${e.message}</span>`;
+            currentChat.messages.pop();
+            await saveToDB(currentModel, chatHistory);
+        } finally {
+            btn.disabled = false;
+            input.focus();
+        }
+    };
+
+    document.getElementById('userInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+    });
+
+    function exportCurrentModelHistory() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(chatHistory));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", `${currentModel}_history.json`);
+        downloadAnchorNode.click();
+    }
+
+    function importHistory(event) {
+        const file = event.target.files[0];
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                chatHistory = JSON.parse(e.target.result);
+                await saveToDB(currentModel, chatHistory);
+                createNewChat();
+                alert("导入成功");
+            } catch (err) { logError("导入解析失败: " + err.message); }
+        };
+        reader.readAsText(file);
+    }
+</script>
+</body>
+</html>
