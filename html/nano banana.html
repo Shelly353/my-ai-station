@@ -3,225 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 绘图视觉工作站 (Pro Max)</title>
+    <title>AI 绘图视觉工作站 (Cloud Edition)</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         :root { --primary: #00b96b; --primary-hover: #009a59; --bg: #f4f5f9; --border: #e5e6eb; }
         body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); display: flex; height: 100vh; margin: 0; overflow: hidden; }
         
-        /* 侧边栏 */
-        .sidebar { width: 360px; background: #fff; border-right: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
+        /* 侧边栏优化 */
+        .sidebar { width: 320px; background: #fff; border-right: 1px solid var(--border); padding: 25px; display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
         .main { flex: 1; display: flex; flex-direction: column; padding: 20px; position: relative; min-width: 0; }
-        #chat-history { flex: 1; background: #fff; border-radius: 12px; padding: 20px; overflow-y: auto; border: 1px solid var(--border); }
+        
+        #chat-history { flex: 1; background: #fff; border-radius: 12px; padding: 20px; overflow-y: auto; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
         
         /* 🚀 图片预览区 */
         .image-result-box { 
             width: 256px; height: auto; min-height: 144px;
-            background: #f8f9fa; border-radius: 6px; cursor: pointer; 
+            background: #f8f9fa; border-radius: 8px; cursor: pointer; 
             margin: 10px 0; overflow: hidden; position: relative; 
-            border: 1px solid var(--border); transition: transform 0.2s;
+            border: 1px solid var(--border); transition: all 0.3s;
             display: flex; align-items: center; justify-content: center;
         }
-        .image-result-box:hover { transform: scale(1.02); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .image-result-box:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.12); }
         .image-result-box img { width: 100%; height: auto; display: block; }
-        .image-result-box::after {
-            content: '🔍 放大预览'; position: absolute; bottom: 10px; right: 10px;
-            background: rgba(0,0,0,0.6); color: #fff; font-size: 11px; padding: 4px 8px; border-radius: 4px; opacity: 0; transition: 0.2s;
-        }
-        .image-result-box:hover::after { opacity: 1; }
-
-        /* 图片上传管理库 */
-        .image-preview-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
-        .img-container { position: relative; width: 100%; aspect-ratio: 1; border-radius: 4px; overflow: hidden; border: 1px solid #eee; background: #fff; }
-        .img-thumb { width: 100%; height: 100%; object-fit: cover; }
-        .img-remove { position: absolute; top: 0; right: 0; background: rgba(245, 63, 63, 0.85); color: white; font-size: 10px; padding: 1px 4px; border-bottom-left-radius: 4px; cursor: pointer; }
 
         /* 基础控件 */
-        .btn { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: bold; }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .sys-group { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #eee; }
-        label { font-size: 12px; font-weight: bold; color: #4e5969; display: block; margin-bottom: 5px; }
-        select, input { font-size: 12px; padding: 8px; width: 100%; box-sizing: border-box; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 10px; outline: none; }
-        select:focus, input:focus { border-color: var(--primary); }
+        .btn { padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: bold; transition: 0.2s; }
+        .btn-primary { background: var(--primary); color: white; width: 100%; margin-top: 10px; font-size: 14px; box-shadow: 0 4px 12px rgba(0,185,107,0.2); }
+        .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        .btn-outline { background: #fff; color: #666; border: 1px solid #ddd; margin-top: 5px; }
+        .btn-outline:hover { background: #f9f9f9; border-color: #ccc; }
 
-        /* 富文本输入区 */
-        .input-area { background: #fff; padding: 15px; border-radius: 12px; border: 1px solid var(--border); margin-top: 15px; flex-shrink: 0; position: relative; }
-        .rich-input { width: 100%; min-height: 80px; max-height: 150px; overflow-y: auto; padding: 12px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 8px; outline: none; font-size: 14px; line-height: 1.6; }
-        .rich-input:empty:before { content: attr(data-placeholder); color: #86909c; pointer-events: none; }
+        .sys-group { background: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 20px; border: 1px solid #eee; }
+        label { font-size: 11px; font-weight: bold; color: #888; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        select, input { font-size: 13px; padding: 10px; width: 100%; box-sizing: border-box; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 12px; outline: none; background: #fff; }
+
+        /* 输入区优化 */
+        .input-area { background: #fff; padding: 20px; border-radius: 16px; border: 1px solid var(--border); margin-top: 15px; flex-shrink: 0; box-shadow: 0 -4px 20px rgba(0,0,0,0.03); }
+        .rich-input { width: 100%; min-height: 60px; max-height: 120px; overflow-y: auto; padding: 10px; box-sizing: border-box; border: 1px solid #eee; border-radius: 8px; outline: none; font-size: 15px; line-height: 1.5; background: #fcfcfc; }
         
-        /* 内联视觉标签 */
-        .inline-pill { display: inline-flex; align-items: center; background: #e6f8ee; border: 1px solid #a3ebd0; border-radius: 4px; padding: 2px 6px; margin: 0 4px; vertical-align: middle; cursor: default; }
+        .inline-pill { display: inline-flex; align-items: center; background: #e6f8ee; border: 1px solid #a3ebd0; border-radius: 4px; padding: 2px 6px; margin: 0 4px; vertical-align: middle; }
         .inline-pill img { width: 18px; height: 18px; object-fit: cover; border-radius: 2px; margin-right: 4px; }
-        .inline-pill span { font-size: 12px; color: var(--primary); font-weight: bold; }
 
-        /* 弹窗及 UI */
-        #modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92); z-index: 5000; justify-content: center; align-items: center; flex-direction: column; }
-        #modal img { max-width: 90%; max-height: 85%; box-shadow: 0 0 50px rgba(0,0,0,0.5); border-radius: 8px; object-fit: contain; }
-        #modal .close-modal-btn { position: absolute; top: 20px; right: 30px; color: #fff; font-size: 40px; cursor: pointer; user-select: none; }
+        /* 弹窗及错误日志 */
+        #modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 5000; justify-content: center; align-items: center; }
+        #modal img { max-width: 90%; max-height: 90%; border-radius: 4px; }
         
-        .task-card { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 15px; margin-bottom: 15px; }
-        #mentionMenu { display: none; position: fixed; background: white; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-radius: 8px; padding: 10px; z-index: 1000; width: 220px; max-height: 200px; overflow-y: auto; }
-        #mentionMenuGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-        .mention-item { width: 45px; height: 45px; border-radius: 4px; overflow: hidden; cursor: pointer; border: 2px solid transparent; background: #f4f5f9; }
-        .mention-item:hover { border-color: var(--primary); }
-        .mention-item img { width: 100%; height: 100%; object-fit: cover; }
-        
-        #hoverPreview { display: none; position: fixed; z-index: 6000; background: #fff; padding: 5px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); pointer-events: none; }
-        #hoverPreview img { max-width: 250px; border-radius: 4px; }
-        
-        .error-console { border: 1px solid #fadcda; background: #fff; border-radius: 8px; margin-top: 15px; flex-shrink: 0; }
-        .error-header { background: #ffece8; color: #f53f3f; padding: 8px 12px; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; justify-content: space-between; }
+        .error-console { border: 1px solid #fadcda; background: #fff; border-radius: 8px; margin-top: 10px; }
+        .error-header { background: #ffece8; color: #f53f3f; padding: 8px 12px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; justify-content: space-between; }
         .error-body { display: none; background: #1e1e1e; padding: 10px; }
-        #errorLogText { width: 100%; height: 80px; background: transparent; color: #ff8a8a; border: none; resize: none; font-size: 12px; font-family: monospace; }
+        #errorLogText { width: 100%; height: 60px; background: transparent; color: #ff8a8a; border: none; font-size: 11px; font-family: monospace; }
+        
+        .image-preview-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+        .img-container { position: relative; aspect-ratio: 1; border-radius: 4px; overflow: hidden; border: 1px solid #eee; }
+        .img-thumb { width: 100%; height: 100%; object-fit: cover; }
     </style>
 </head>
 <body>
 
 <div class="sidebar">
-    <h3 style="margin-bottom:20px; color: var(--primary);">🎨 AI 绘图工作站</h3>
+    <h3 style="margin: 0 0 25px 0; color: var(--primary); display: flex; align-items: center; gap: 8px;">
+        <span>🎨</span> Visual Workstation
+    </h3>
     
-    <label>API Key</label>
-    <input type="password" id="apiKey" onchange="saveSet()" placeholder="sk-...">
-    
-    <label>API 接口地址 (Base URL)</label>
-    <input type="text" id="apiBase" onchange="saveSet()" placeholder="https://api.example.com/v1/images/generations">
+    <div style="background: #e6f8ee; padding: 10px; border-radius: 8px; margin-bottom: 20px; font-size: 11px; color: var(--primary); font-weight: bold; text-align: center;">
+        🍌 nano banana pro
+    </div>
 
     <label>核心生成模型</label>
-    <select id="modelSelect" onchange="handleModelChange()" style="border-color:var(--primary); font-weight:bold;">
+    <select id="modelSelect" onchange="handleModelChange()">
         <option value="nano-banana-pro">Nano Banana Pro</option>
         <option value="dall-e-3">DALL-E 3</option>
-        <option value="midjourney-v6">Midjourney v6</option>
         <option value="stable-diffusion-xl">Stable Diffusion XL</option>
-        <option value="custom">⚙️ 自定义模型 ID...</option>
     </select>
-    <input type="text" id="modelCustom" placeholder="输入 ID" style="display:none;" onchange="saveSet()">
 
-    <div style="display:grid; grid-template-columns: 1.2fr 1fr 1fr; gap:6px;">
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
         <div>
             <label>生成比例</label>
             <select id="ratio" onchange="handleRatioChange()">
                 <option value="1:1">1:1 (方图)</option>
                 <option value="16:9">16:9 (横图)</option>
                 <option value="9:16">9:16 (竖图)</option>
-                <option value="21:9">21:9 (宽屏)</option>
-                <option value="4:3">4:3 (标准)</option>
+                <option value="21:9">21:9 (电影)</option>
+                <option value="4:3">4:3 (电视)</option>
                 <option value="custom">自定义...</option>
             </select>
-            <input type="text" id="customRatio" placeholder="如 2:3" style="display:none; margin-top:2px;" onchange="saveSet()">
+            <input type="text" id="customRatio" placeholder="如 2:3" style="display:none; margin-top:-8px;">
         </div>
         <div>
-            <label>分辨率</label>
-            <select id="resolution" onchange="saveSet()">
-                <option value="1K">1K</option>
-                <option value="2K" selected>2K</option>
-                <option value="4K">4K</option>
-            </select>
-        </div>
-        <div>
-            <label>生成数量</label>
-            <select id="imageCount" onchange="saveSet()">
+            <label>图片数量</label>
+            <select id="imageCount">
                 <option value="1">1 张</option>
                 <option value="2">2 张</option>
+                <option value="3">3 张</option>
                 <option value="4">4 张</option>
             </select>
         </div>
     </div>
 
     <div class="sys-group">
-        <label>🖼️ 参考图库 / 垫图 (支持 @ 引用)</label>
+        <label>🖼️ 参考图库 / 垫图 (@ 引用)</label>
         <input type="file" id="multiInput" multiple accept="image/*" onchange="handleMultiUpload(this)">
         <div id="multiPreviewGrid" class="image-preview-grid"></div>
-        <button class="btn" style="width:100%; background:#eee; margin-top:10px;" onclick="clearMultiImages()">清空图库</button>
+        <button class="btn btn-outline" style="width:100%; font-size:11px;" onclick="clearMultiImages()">清空参考图</button>
     </div>
 
-    <div class="sys-group">
-        <button class="btn" style="width:100%; background:#eee; margin-bottom:5px;" onclick="exportHistory()">📥 导出记录</button>
-        <button class="btn" style="width:100%; background:#eee;" onclick="document.getElementById('importFile').click()">📤 导入记录</button>
-        <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importHistory(event)">
+    <button class="btn btn-primary" onclick="runTask()">✨ 立即开始生成</button>
+
+    <div style="margin-top: auto; padding-top: 20px; display: flex; gap: 5px;">
+        <button class="btn btn-outline" style="flex:1;" onclick="exportHistory()">导出</button>
+        <button class="btn btn-outline" style="flex:1;" onclick="document.getElementById('importFile').click()">导入</button>
     </div>
+    <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importHistory(event)">
 </div>
 
 <div class="main">
     <div id="chat-history"></div>
-    <div class="input-area">
-        <div id="prompt" class="rich-input" contenteditable="true" data-placeholder="描述你要生成的画面... (输入 @ 呼出参考图库)"></div>
-        <div id="mentionMenu"><div id="mentionMenuGrid"></div></div>
-        <button class="btn btn-primary" style="float:right; margin-top:10px; width:120px;" onclick="runTask()">✨ 开始生图</button>
-        <div style="clear:both;"></div>
-    </div>
     
-    <div id="hoverPreview"><img id="hoverImg" src=""></div>
+    <div class="input-area">
+        <div id="prompt" class="rich-input" contenteditable="true" data-placeholder="输入提示词... 使用 @ 引用参考图库中的图片"></div>
+        <div id="mentionMenu" style="display:none; position:fixed; background:#fff; border:1px solid #ddd; padding:8px; border-radius:8px; z-index:1000; box-shadow:0 8px 24px rgba(0,0,0,0.15);">
+            <div id="mentionMenuGrid" style="display:grid; grid-template-columns:repeat(4, 45px); gap:5px;"></div>
+        </div>
+    </div>
     
     <div id="errorConsole" class="error-console">
-        <div class="error-header" onclick="document.querySelector('.error-body').style.display = document.querySelector('.error-body').style.display==='block'?'none':'block'"><span>⚠️ 错误日志 (<span id="errorCount">0</span>)</span><span>▲</span></div>
-        <div class="error-body"><textarea id="errorLogText" readonly></textarea></div>
+        <div class="error-header" onclick="toggleError()"><span>⚠️ 错误监控日志</span><span id="errStatus">▲</span></div>
+        <div class="error-body" id="errBody"><textarea id="errorLogText" readonly></textarea></div>
     </div>
 </div>
 
-<div id="modal">
-    <span class="close-modal-btn" onclick="closeModal()">×</span>
-    <img id="modalImg" src="">
-</div>
+<div id="modal" onclick="closeModal()"><img id="modalImg" src=""></div>
 
 <script>
-    let history = JSON.parse(localStorage.getItem('seed_img_history') || '[]');
-    let multiImages = [];
-    let errCount = 0;
-    let savedRange = null;
-
-    window.onload = () => {
-        // 恢复配置
-        document.getElementById('apiKey').value = localStorage.getItem('seed_img_key') || '';
-        document.getElementById('apiBase').value = localStorage.getItem('seed_img_base') || '';
-        document.getElementById('resolution').value = localStorage.getItem('seed_img_res') || '2K';
-        document.getElementById('imageCount').value = localStorage.getItem('seed_img_count') || '1';
-        
-        const savedModel = localStorage.getItem('seed_img_model') || 'nano-banana-pro';
-        const sel = document.getElementById('modelSelect');
-        if([...sel.options].some(o => o.value === savedModel)) sel.value = savedModel;
-        else { sel.value = 'custom'; document.getElementById('modelCustom').style.display = 'block'; document.getElementById('modelCustom').value = savedModel; }
-        
-        const savedRatio = localStorage.getItem('seed_img_ratio') || '16:9';
-        const rSel = document.getElementById('ratio');
-        if([...rSel.options].some(o => o.value === savedRatio)) {
-            rSel.value = savedRatio;
-        } else {
-            rSel.value = 'custom';
-            document.getElementById('customRatio').style.display = 'block';
-            document.getElementById('customRatio').value = savedRatio;
+    // 🌟 全局配置
+    const MODEL_CONFIG = {
+        "nano-banana-pro": {
+            name: "Nano Banana Pro",
+            apiUrl: "https://proxy-server-0m02.onrender.com/api/image/create"
+        },
+        "dall-e-3": {
+            name: "DALL-E 3",
+            apiUrl: "https://proxy-server-0m02.onrender.com/api/image/create"
+        },
+        "stable-diffusion-xl": {
+            name: "Stable Diffusion XL",
+            apiUrl: "https://proxy-server-0m02.onrender.com/api/image/create"
         }
-        
-        render();
     };
 
-    function saveSet() {
-        localStorage.setItem('seed_img_key', document.getElementById('apiKey').value);
-        localStorage.setItem('seed_img_base', document.getElementById('apiBase').value);
-        localStorage.setItem('seed_img_res', document.getElementById('resolution').value);
-        localStorage.setItem('seed_img_count', document.getElementById('imageCount').value);
-        
-        const m = document.getElementById('modelSelect').value;
-        localStorage.setItem('seed_img_model', m === 'custom' ? document.getElementById('modelCustom').value : m);
-        
-        const r = document.getElementById('ratio').value;
-        localStorage.setItem('seed_img_ratio', r === 'custom' ? document.getElementById('customRatio').value : r);
-    }
+    // 🌟 变量声明（确保只声明一次）
+    let history = JSON.parse(localStorage.getItem('seed_img_history') || '[]');
+    let multiImages = [];
+    let savedRange = null;
 
+    window.onload = () => { render(); };
+
+    // 模型切换处理
     function handleModelChange() {
-        document.getElementById('modelCustom').style.display = document.getElementById('modelSelect').value === 'custom' ? 'block' : 'none';
-        saveSet();
+        console.log("模型已切换至:", document.getElementById('modelSelect').value);
     }
 
-    // 🌟 控制自定义比例输入框的显示
-    function handleRatioChange() {
-        const val = document.getElementById('ratio').value;
-        document.getElementById('customRatio').style.display = val === 'custom' ? 'block' : 'none';
-        saveSet();
+    // 比例切换处理
+    function handleRatioChange() { 
+        document.getElementById('customRatio').style.display = document.getElementById('ratio').value === 'custom' ? 'block' : 'none';
     }
 
-    // ==========================================
-    // 图库与 @ 交互逻辑 (最强兼容版)
-    // ==========================================
+    // 图片上传处理
     function handleMultiUpload(inp) {
         Array.from(inp.files).forEach(f => {
             const r = new FileReader();
@@ -231,243 +178,153 @@
         inp.value = "";
     }
     
-    function clearMultiImages() { multiImages = []; refreshMultiGrid(); }
-    
     function refreshMultiGrid() {
         document.getElementById('multiPreviewGrid').innerHTML = multiImages.map((img,i)=>`
-            <div class="img-container">
-                <img src="${img}">
-                <span class="img-remove" onclick="multiImages.splice(${i},1);refreshMultiGrid()">×</span>
-            </div>
+            <div class="img-container"><img src="${img}" style="width:100%;height:100%;object-fit:cover;"></div>
         `).join('');
     }
 
-    const promptEl = document.getElementById('prompt');
-    promptEl.addEventListener('input', (e) => {
-        const sel = window.getSelection();
-        if (!sel.rangeCount) return;
-        const range = sel.getRangeAt(0);
-        
-        const preRange = range.cloneRange();
-        preRange.selectNodeContents(promptEl);
-        preRange.setEnd(range.startContainer, range.startOffset);
-        const text = preRange.toString();
-
-        if(text.endsWith('@') || text.endsWith('＠')) {
-            if(multiImages.length === 0) return alert("请先上传参考图");
-            showMentionMenu(range);
-        } else document.getElementById('mentionMenu').style.display='none';
-    });
-
-    document.addEventListener('mousedown', (e) => {
-        const menu = document.getElementById('mentionMenu');
-        if (!menu.contains(e.target) && e.target !== promptEl) {
-            menu.style.display = 'none';
-        }
-    });
-
-    function showMentionMenu(range) {
-        savedRange = range.cloneRange();
-        let rect = range.getBoundingClientRect();
-        if (rect.width === 0) {
-            const tempSpan = document.createElement('span'); tempSpan.innerHTML = '&#8203;';
-            range.insertNode(tempSpan); rect = tempSpan.getBoundingClientRect(); tempSpan.parentNode.removeChild(tempSpan);
-        }
-        const menu = document.getElementById('mentionMenu');
-        menu.style.display = 'block';
-        menu.style.left = (rect.left + window.scrollX) + 'px';
-        menu.style.top = (rect.bottom + window.scrollY + 8) + 'px';
-        
-        document.getElementById('mentionMenuGrid').innerHTML = multiImages.map((img,i)=>`
-            <div class="mention-item" onmousedown="event.preventDefault();insertPill(${i},'${img}')"><img src="${img}"></div>
-        `).join('');
+    function clearMultiImages() {
+        multiImages = [];
+        refreshMultiGrid();
     }
 
-    function insertPill(i, img) {
-        document.getElementById('mentionMenu').style.display='none';
-        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(savedRange);
-        savedRange.setStart(savedRange.startContainer, savedRange.startOffset - 1); savedRange.deleteContents();
-        
-        const span = document.createElement('span');
-        span.className = 'inline-pill'; span.contentEditable = 'false';
-        span.setAttribute('data-b64', img);
-        span.innerHTML = `<img src="${img}"><span>Ref</span>`;
-        
-        span.onmouseenter = () => {
-            const hp = document.getElementById('hoverPreview');
-            document.getElementById('hoverImg').src = img;
-            hp.style.display='block';
-            const r = span.getBoundingClientRect();
-            hp.style.left = r.left + 'px'; hp.style.top = (r.top - 260) + 'px';
-        };
-        span.onmouseleave = () => document.getElementById('hoverPreview').style.display='none';
-        
-        savedRange.insertNode(span);
-        const space = document.createTextNode('\u00A0');
-        savedRange.setStartAfter(span); savedRange.insertNode(space);
-        savedRange.collapse(false); sel.removeAllRanges(); sel.addRange(savedRange);
-        promptEl.focus();
-    }
-
-    // ==========================================
-    // 🌟 API 请求核心
-    // ==========================================
+    // 🌟 核心：生图任务
     async function runTask() {
-        const key = document.getElementById('apiKey').value;
-        const apiBase = document.getElementById('apiBase').value;
-        const m = document.getElementById('modelSelect').value;
-        const mid = m === 'custom' ? document.getElementById('modelCustom').value : m;
-        
-        // 🌟 获取并校验自定义比例
-        let ratio = document.getElementById('ratio').value;
-        if (ratio === 'custom') {
-            ratio = document.getElementById('customRatio').value.trim();
-            if (!ratio) return alert("请在左侧填写自定义比例，例如 2:3");
-        }
-        
-        const resVal = document.getElementById('resolution').value;
-        const imgCount = parseInt(document.getElementById('imageCount').value);
-        
-        // 提取纯文本（内置的富文本 span 也会被读取为 "@1" 这样的纯文本）
+        const promptEl = document.getElementById('prompt');
         let rawText = "";
         let inlineImgs = [];
         
         promptEl.childNodes.forEach(node => {
-            if (node.nodeType === Node.TEXT_NODE) {
-                rawText += node.textContent;
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
+            if (node.nodeType === Node.TEXT_NODE) rawText += node.textContent;
+            else if (node.nodeType === Node.ELEMENT_NODE) {
                 if (node.classList.contains('inline-pill')) inlineImgs.push(node.getAttribute('data-b64'));
-                else rawText += node.innerText || "\n"; 
+                else rawText += node.innerText;
             }
         });
         
         const pText = rawText.trim();
-        if(!key || !apiBase || !pText) return alert("请检查 Key、接口地址和提示词！");
-
-        // 🌟 将比例和分辨率拼接到提示词末尾发送，适配大部分通用绘图模型接口
-        const finalPrompt = pText + ` --ratio ${ratio} --resolution ${resVal}`;
-
-        let payload = {
-            model: mid,
-            prompt: finalPrompt,
-            n: imgCount
-        };
-        
-        // 若有垫图，推入 payload.images
-        if (inlineImgs.length > 0) {
-            payload.images = inlineImgs;
-        }
+        if(!pText) return alert("请输入提示词！");
 
         const id = Date.now();
-        history.unshift({ id, prompt: finalPrompt, status: 'loading', urls: [] });
+        const ratio = document.getElementById('ratio').value === 'custom' ? document.getElementById('customRatio').value : document.getElementById('ratio').value;
+        const modelKey = document.getElementById('modelSelect').value;
+        const config = MODEL_CONFIG[modelKey]; // 🌟 使用配置对象
+
+        history.unshift({ id, prompt: pText, status: 'loading', urls: [] });
         render();
 
         try {
-            const res = await fetch(apiBase, {
+            const response = await fetch(config.apiUrl, { // 🌟 动态获取 URL
                 method: 'POST',
                 headers: { 
-    'Content-Type': 'application/json',
-    'x-access-code': localStorage.getItem('my_api_access_code') // 自动读取
-},
-                body: JSON.stringify(payload)
+                    'Content-Type': 'application/json',
+                    'x-access-code': localStorage.getItem('my_api_access_code') 
+                },
+                body: JSON.stringify({
+                    model: modelKey,
+                    prompt: pText,
+                    ratio: ratio,
+                    n: parseInt(document.getElementById('imageCount').value),
+                    images: inlineImgs 
+                })
             });
-            const data = await res.json();
-            
-            if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-            
-            // 解析常见的大模型返回体
-            let resultUrls = [];
-            if (data.data && Array.isArray(data.data)) {
-                resultUrls = data.data.map(item => item.url);
-            } else if (data.url) {
-                resultUrls = [data.url];
-            } else {
-                throw new Error("接口返回格式异常，无法解析到图片 URL。");
-            }
 
-            update(id, 'success', resultUrls);
+            if (!response.ok) throw new Error(`HTTP ${response.status}: 授权失败或后端未响应`);
+            
+            const data = await response.json();
+            const urls = data.data ? data.data.map(d => d.url) : [data.url];
+            
+            update(id, 'success', urls);
         } catch (e) {
-            logError(id, e.message);
+            logError(e.message);
             update(id, 'failed', []);
         }
     }
 
     function update(id, s, urls) {
         const i = history.find(x => x.id === id);
-        if(i) { i.status = s; if(urls.length > 0) i.urls = urls; localStorage.setItem('seed_img_history', JSON.stringify(history)); render(); }
+        if(i) { i.status = s; i.urls = urls; localStorage.setItem('seed_img_history', JSON.stringify(history)); render(); }
     }
 
-    // ==========================================
-    // 渲染与持久化管理
-    // ==========================================
     function render() {
-        document.getElementById('chat-history').innerHTML = history.map(item => {
-            let imgHtml = '';
-            if (item.status === 'success' && item.urls) {
-                imgHtml = `<div style="display:flex; flex-wrap:wrap; gap:10px;">`;
-                item.urls.forEach((u, idx) => {
-                    const localPath = `./images/${item.id}_${idx}.png`;
-                    imgHtml += `
-                    <div class="image-result-box" onclick="play('${u}', '${localPath}')">
-                        <img src="${localPath}" onerror="this.onerror=null;this.src='${u}';">
-                    </div>`;
-                });
-                imgHtml += `</div>`;
-            }
-
-            return `
-            <div class="task-card">
-                <div style="font-size:11px;color:#888;">ID: ${item.id}</div>
-                <div style="font-size:14px;margin:5px 0;white-space:pre-wrap;word-break:break-word;"><b>Prompt:</b> ${item.prompt}</div>
-                ${item.status === 'loading' ? '<div style="color:var(--primary);font-weight:bold;">✨ 正在绘画中，请稍候...</div>' : ''}
-                ${item.status === 'failed' ? '<div style="color:#f53f3f;font-weight:bold;">❌ 生成失败，请查看下方日志。</div>' : ''}
-                ${item.status === 'success' ? imgHtml : ''}
-                
-                ${item.status !== 'loading' ? `
-                <div style="margin-top:10px; display:flex; gap:10px;">
-                    ${item.status === 'success' ? `<button class="btn" style="background:#e6f8ee; color:var(--primary);" onclick="batchDownload('${item.id}')">⬇️ 下载至本地库</button>` : ''}
-                    <button class="btn" style="background:#fff1f0; color:#f53f3f;" onclick="history=history.filter(x=>x.id!=${item.id});localStorage.setItem('seed_img_history', JSON.stringify(history));render()">🗑️ 删除记录</button>
-                </div>` : ''}
+        document.getElementById('chat-history').innerHTML = history.map(item => `
+            <div class="task-card" style="background:#fff; border:1px solid #eee; border-radius:12px; padding:15px; margin-bottom:15px;">
+                <div style="font-size:13px; margin-bottom:8px;"><b>Prompt:</b> ${item.prompt}</div>
+                ${item.status === 'loading' ? '<div style="color:var(--primary); font-size:12px;">✨ 正在构思画面中...</div>' : ''}
+                ${item.status === 'success' ? `<div style="display:flex; gap:10px; flex-wrap:wrap;">${item.urls.map(u => `<div class="image-result-box" onclick="showFull('${u}')"><img src="${u}"></div>`).join('')}</div>` : ''}
+                ${item.status === 'failed' ? '<div style="color:red; font-size:12px;">❌ 生成失败，请检查暗号或后台配置。</div>' : ''}
+                <div style="margin-top:10px;"><button class="btn btn-outline" style="font-size:10px; padding:4px 8px;" onclick="deleteItem(${item.id})">删除</button></div>
             </div>
-            `;
-        }).join('');
+        `).join('');
     }
 
-    function logError(id, m) { errCount++; document.getElementById('errorCount').innerText = errCount; document.getElementById('errorLogText').value = `[${new Date().toLocaleTimeString()}] Error: ${m}\n` + document.getElementById('errorLogText').value; document.getElementById('errorConsole').classList.add('open'); }
-    
-    function play(remote, local) { 
-        const m = document.getElementById('modal'); 
-        const img = document.getElementById('modalImg'); 
-        img.src = local; 
-        img.onerror = () => { img.onerror = null; img.src = remote; }; 
-        m.style.display = 'flex'; 
-    }
+    function deleteItem(id) { history = history.filter(x => x.id !== id); localStorage.setItem('seed_img_history', JSON.stringify(history)); render(); }
+    function logError(m) { const el = document.getElementById('errorLogText'); el.value = `[${new Date().toLocaleTimeString()}] ${m}\n` + el.value; }
+    function toggleError() { const b = document.getElementById('errBody'); b.style.display = b.style.display === 'block' ? 'none' : 'block'; }
+    function showFull(u) { const m = document.getElementById('modal'); document.getElementById('modalImg').src = u; m.style.display = 'flex'; }
     function closeModal() { document.getElementById('modal').style.display = 'none'; }
-
-    async function batchDownload(id) {
-        const item = history.find(x => x.id === id);
-        if (!item || !item.urls) return;
-        
-        let successCount = 0;
-        for(let i = 0; i < item.urls.length; i++) {
-            try {
-                const res = await fetch(item.urls[i]);
-                const blob = await res.blob();
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = `${id}_${i}.png`; 
-                a.click();
-                successCount++;
-            } catch(e) {
-                window.open(item.urls[i], '_blank');
-            }
-            await new Promise(r => setTimeout(r, 500));
-        }
-        if (successCount > 0) alert("✅ 下载触发成功！\n请将图片归档至同级目录的 images 文件夹内即可离线加载。");
+    
+    // 导入导出功能补全
+    function exportHistory() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(history));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", "drawing_history.json");
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
     }
 
-    function exportHistory() { const a=document.createElement('a'); a.href="data:text/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(history)); a.download="seed_img_history.json"; a.click(); }
-    function importHistory(e) { const r=new FileReader(); r.onload=(x)=>{history=JSON.parse(x.target.result);render();}; r.readAsText(e.target.files[0]); }
+    function importHistory(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const imported = JSON.parse(e.target.result);
+                history = imported;
+                localStorage.setItem('seed_img_history', JSON.stringify(history));
+                render();
+            } catch (err) { alert("导入失败，文件格式错误"); }
+        };
+        reader.readAsText(file);
+    }
+
+    // @ 引用逻辑保持
+    const promptEl = document.getElementById('prompt');
+    promptEl.addEventListener('input', (e) => {
+        const sel = window.getSelection();
+        const range = sel.getRangeAt(0);
+        const text = range.startContainer.textContent || "";
+        if(text.endsWith('@') && multiImages.length > 0) {
+            savedRange = range.cloneRange();
+            showMenu(range);
+        }
+    });
+
+    function showMenu(range) {
+        const menu = document.getElementById('mentionMenu');
+        const rect = range.getBoundingClientRect();
+        menu.style.display = 'block';
+        menu.style.left = rect.left + 'px';
+        menu.style.top = (rect.bottom + 5) + 'px';
+        document.getElementById('mentionMenuGrid').innerHTML = multiImages.map((img,i)=>`
+            <div onclick="insertImg('${img}')" style="cursor:pointer; width:45px; height:45px; border-radius:4px; overflow:hidden;"><img src="${img}" style="width:100%;height:100%;object-fit:cover;"></div>
+        `).join('');
+    }
+
+    function insertImg(img) {
+        document.getElementById('mentionMenu').style.display = 'none';
+        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(savedRange);
+        document.execCommand('delete'); 
+        const span = document.createElement('span');
+        span.className = 'inline-pill'; span.contentEditable = 'false';
+        span.setAttribute('data-b64', img);
+        span.innerHTML = `<img src="${img}"><span>Ref</span>`;
+        savedRange.insertNode(span);
+        promptEl.focus();
+    }
 </script>
 </body>
 </html>
