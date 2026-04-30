@@ -251,18 +251,16 @@
         win.scrollTop = win.scrollHeight;
 
     // 🌟 找到 logic.html 中的这部分并替换
-        try {
+try {
+            // 🌟 1. 告诉后端，我要开启打字机模式 (stream: true)
             const response = await fetch(config.url, {
                 method: 'POST',
-           headers: { 
-            'Content-Type': 'application/json', 
-            // 1. 保留原有的 Authorization（如果你的后端还需要它）
-            'Authorization': `Bearer ${config.key}`,
-            // 2. 🌟 在这里加入你的“通关文牒”
-            'x-access-code': localStorage.getItem('my_api_access_code') 
-        },
-                // 1. 确保 stream 为 false
-                body: JSON.stringify({ model: config.id, messages: currentChat.messages, stream: false })
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'Authorization': `Bearer ${config.key}`,
+                    'x-access-code': localStorage.getItem('my_api_access_code') 
+                },
+                body: JSON.stringify({ model: config.id, messages: currentChat.messages, stream: true })
             });
 
             if (!response.ok) {
@@ -270,26 +268,71 @@
                 throw new Error(`HTTP ${response.status}: ${errBody}`);
             }
 
-            // 2. 🌟 核心修改：既然不是流式，直接用 .json() 接收完整包裹
-            const data = await response.json();
-            
-            // 3. 提取 AI 回复的内容 (适配标准 OpenAI/DeepSeek/Gemini 格式)
+            // 🌟 2. 准备接水：创建流式读取器
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
             let fullText = "";
-            if (data.choices && data.choices[0].message) {
-                fullText = data.choices[0].message.content;
-            } else if (data.candidates) { // 兼容某些原生 Gemini 格式
-                fullText = data.candidates[0].content.parts[0].text;
+            let buffer = ""; // 缓冲区，防止数据包在中途被切断
+
+            botDiv.innerHTML = `<b>AI:</b> ▍`; // 显示初始光标
+
+            // 🌟 3. 开始一滴一滴接水
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break; // 读取完毕跳出循环
+
+                // 把字节解码成文本，存入缓冲区
+                buffer += decoder.decode(value, { stream: true });
+                
+                // 按换行符切分数据包 (SSE 规范)
+                let lines = buffer.split('\n');
+                // 把最后可能不完整的一行留给下一次循环的缓冲区
+                buffer = lines.pop(); 
+
+                for (let line of lines) {
+                    line = line.trim();
+                    if (line.startsWith('data: ')) {
+                        const dataStr = line.slice(6);
+                        
+                        // [DONE] 代表流传输正式结束
+                        if (dataStr === '[DONE]') continue;
+
+                        try {
+                            // 解析每一小块的数据
+                            const parsed = JSON.parse(dataStr);
+                            let delta = "";
+                            
+                            // 适配 DeepSeek/OpenAI 的数据结构
+                            if (parsed.choices && parsed.choices[0].delta && parsed.choices[0].delta.content) {
+                                delta = parsed.choices[0].delta.content;
+                            } 
+                            // 兼容 Gemini 流式结构
+                            else if (parsed.candidates && parsed.candidates[0].content && parsed.candidates[0].content.parts[0].text) {
+                                delta = parsed.candidates[0].content.parts[0].text;
+                            }
+
+                            fullText += delta;
+                            
+                            // 实时渲染到屏幕上，尾部加上一个打字机光标
+                            botDiv.innerHTML = `<b>AI:</b> ` + marked.parse(fullText + " ▍");
+                            
+                            // 自动滚动到底部
+                            win.scrollTop = win.scrollHeight;
+                        } catch (e) {
+                            // 忽略解析错误，有些残缺包裹等下一波补全
+                        }
+                    }
+                }
             }
 
+            // 🌟 4. 读取结束，移除打字机光标，保存历史记录
             botDiv.innerHTML = `<b>AI:</b> ` + marked.parse(fullText);
-            win.scrollTop = win.scrollHeight;
-
             currentChat.messages.push({ role: 'assistant', content: fullText });
             await saveToDB(currentModel, chatHistory);
 
         } catch (e) {
-            logError(e.message); 
-            botDiv.innerHTML = `<span style="color:red">请求失败: ${e.message}</span>`;
+            logError("请求失败: " + e.message); 
+            botDiv.innerHTML = `<span style="color:#dc3545; font-weight:bold;">❌ 请求失败: ${e.message}</span>`;
             currentChat.messages.pop();
             await saveToDB(currentModel, chatHistory);
         } finally {
